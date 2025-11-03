@@ -148,6 +148,19 @@ export const findComposeById = async (composeId: string) => {
 	return result;
 };
 
+/**
+ * Loads service names from a Docker Compose file
+ * 
+ * @param composeId - The ID of the compose application
+ * @param type - "fetch" to clone repository first, "cache" to use existing files
+ * @returns Array of service names, or empty array on error (allows manual input fallback)
+ * 
+ * @remarks
+ * - Gracefully handles errors by returning empty array instead of throwing
+ * - Logs warnings for debugging purposes
+ * - Supports both local and remote servers
+ * - Handles CLI flags in composePath via getComposePath parsing
+ */
 export const loadServices = async (
 	composeId: string,
 	type: "fetch" | "cache" = "fetch",

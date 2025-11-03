@@ -175,5 +175,66 @@ describe("getComposePath - CLI Flag Parsing (Milestone 2)", () => {
 
 		expect(result).toBe(expected);
 	});
+
+	test("should handle multiple -f flags and use first", () => {
+		const mockCompose: Partial<Compose> = {
+			appName: "test-app",
+			sourceType: "github",
+			composePath: "-f docker-compose.yml -f docker-compose.prod.yml",
+			serverId: null,
+		};
+
+		const result = getComposePath(mockCompose as Compose);
+		const expected = join("/mock/compose/path", "test-app", "code", "docker-compose.yml");
+
+		expect(result).toBe(expected);
+	});
+
+	test("should handle empty compose path", () => {
+		const mockCompose: Partial<Compose> = {
+			appName: "test-app",
+			sourceType: "github",
+			composePath: "",
+			serverId: null,
+		};
+
+		const result = getComposePath(mockCompose as Compose);
+		const expected = join("/mock/compose/path", "test-app", "code", "./docker-compose.yml");
+
+		expect(result).toBe(expected);
+	});
+
+	test("should handle whitespace-only compose path", () => {
+		const mockCompose: Partial<Compose> = {
+			appName: "test-app",
+			sourceType: "github",
+			composePath: "   ",
+			serverId: null,
+		};
+
+		const result = getComposePath(mockCompose as Compose);
+		const expected = join("/mock/compose/path", "test-app", "code", "./docker-compose.yml");
+
+		expect(result).toBe(expected);
+	});
+
+	test("should handle path with special characters in quotes", () => {
+		const mockCompose: Partial<Compose> = {
+			appName: "test-app",
+			sourceType: "github",
+			composePath: '-f "path with spaces & special-chars.yml"',
+			serverId: null,
+		};
+
+		const result = getComposePath(mockCompose as Compose);
+		const expected = join(
+			"/mock/compose/path",
+			"test-app",
+			"code",
+			"path with spaces & special-chars.yml",
+		);
+
+		expect(result).toBe(expected);
+	});
 });
 
