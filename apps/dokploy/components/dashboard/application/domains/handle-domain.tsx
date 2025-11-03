@@ -39,7 +39,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DatabaseZap, Dices, RefreshCw } from "lucide-react";
+import { CheckCircle2, DatabaseZap, Dices, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import z from "zod";
 
@@ -279,45 +279,73 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 								<div className="flex flex-row items-end w-full gap-4">
 									{domainType === "compose" && (
 										<div className="flex flex-col gap-2 w-full">
-											{errorServices && (
+											{(errorServices ||
+												(!isLoadingServices &&
+													services !== undefined &&
+													services.length === 0)) && (
 												<AlertBlock
 													type="warning"
 													className="[overflow-wrap:anywhere]"
 												>
-													{errorServices?.message}
+													{errorServices?.message ||
+														"Service discovery couldn't find services. You can enter the service name manually below."}
 												</AlertBlock>
 											)}
 											<FormField
 												control={form.control}
 												name="serviceName"
-												render={({ field }) => (
-													<FormItem className="w-full">
-														<FormLabel>Service Name</FormLabel>
-														<div className="flex gap-2">
-															<Select
-																onValueChange={field.onChange}
-																defaultValue={field.value || ""}
-															>
-																<FormControl>
-																	<SelectTrigger>
-																		<SelectValue placeholder="Select a service name" />
-																	</SelectTrigger>
-																</FormControl>
+												render={({ field }) => {
+													// Check if the current value matches a discovered service
+													const valueMatchesService =
+														field.value &&
+														services?.includes(field.value);
+													const isInSync = valueMatchesService;
 
-																<SelectContent>
-																	{services?.map((service, index) => (
-																		<SelectItem
-																			value={service}
-																			key={`${service}-${index}`}
-																		>
-																			{service}
+													return (
+														<FormItem className="w-full">
+															<FormLabel>Service Name</FormLabel>
+															<div className="flex gap-2">
+																<Select
+																	onValueChange={(value) => {
+																		field.onChange(value);
+																	}}
+																	value={field.value || ""}
+																>
+																	<FormControl>
+																		<SelectTrigger className="flex-1">
+																			<SelectValue placeholder="Select a service name" />
+																		</SelectTrigger>
+																	</FormControl>
+
+																	<SelectContent>
+																		{services?.map((service, index) => (
+																			<SelectItem
+																				value={service}
+																				key={`${service}-${index}`}
+																			>
+																				{service}
+																			</SelectItem>
+																		))}
+																		<SelectItem value="none" disabled>
+																			Empty
 																		</SelectItem>
-																	))}
-																	<SelectItem value="none" disabled>
-																		Empty
-																	</SelectItem>
-																</SelectContent>
-															</Select>
+																	</SelectContent>
+																</Select>
+																<div className="relative flex-1">
+																	<FormControl>
+																		<Input
+																			placeholder="Or enter service name manually"
+																			value={field.value || ""}
+																			onChange={(e) => {
+																				field.onChange(e.target.value);
+																			}}
+																			className="flex-1"
+																		/>
+																	</FormControl>
+																	{isInSync && field.value && (
+																		<CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-green-500" />
+																	)}
+																</div>
 															<TooltipProvider delayDuration={0}>
 																<Tooltip>
 																	<TooltipTrigger asChild>
