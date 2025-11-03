@@ -71,6 +71,36 @@ export const cloneComposeRemote = async (compose: Compose) => {
 	}
 };
 
+/**
+ * Parses composePath to extract actual file path, handling CLI flags
+ * Supports: -f file.yml, --file file.yml, -f "quoted path.yml"
+ */
+const parseComposePath = (composePath: string): string => {
+	// If no CLI flags detected, return as-is
+	if (!composePath.includes("-f") && !composePath.includes("--file")) {
+		return composePath.trim();
+	}
+
+	// Pattern 1: -f file.yml or -f "file.yml" or -f 'file.yml'
+	const flagPattern = /-f\s+(?:"([^"]+)"|'([^']+)'|(\S+))/;
+	const flagMatch = composePath.match(flagPattern);
+	if (flagMatch) {
+		return (flagMatch[1] || flagMatch[2] || flagMatch[3] || "").trim();
+	}
+
+	// Pattern 2: --file file.yml or --file "file.yml" or --file 'file.yml'
+	const longFlagPattern = /--file\s+(?:"([^"]+)"|'([^']+)'|(\S+))/;
+	const longFlagMatch = composePath.match(longFlagPattern);
+	if (longFlagMatch) {
+		return (
+			longFlagMatch[1] || longFlagMatch[2] || longFlagMatch[3] || ""
+		).trim();
+	}
+
+	// Fallback: return original (may contain flags, but better than nothing)
+	return composePath.trim();
+};
+
 export const getComposePath = (compose: Compose) => {
 	const { COMPOSE_PATH } = paths(!!compose.serverId);
 	const { appName, sourceType, composePath } = compose;
@@ -79,7 +109,7 @@ export const getComposePath = (compose: Compose) => {
 	if (sourceType === "raw") {
 		path = "docker-compose.yml";
 	} else {
-		path = composePath;
+		path = parseComposePath(composePath);
 	}
 
 	return join(COMPOSE_PATH, appName, "code", path);
