@@ -412,8 +412,9 @@ export const AddDomain = ({ id, type, domainId = "", children }: Props) => {
 
 														<FormMessage />
 													</FormItem>
-												)}
-											/>
+												);
+											}}
+										/>
 										</div>
 									)}
 								</div>
