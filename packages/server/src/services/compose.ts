@@ -148,46 +148,66 @@ export const findComposeById = async (composeId: string) => {
 	return result;
 };
 
+/**
+ * Loads service names from a Docker Compose file
+ * 
+ * @param composeId - The ID of the compose application
+ * @param type - "fetch" to clone repository first, "cache" to use existing files
+ * @returns Array of service names, or empty array on error (allows manual input fallback)
+ * 
+ * @remarks
+ * - Gracefully handles errors by returning empty array instead of throwing
+ * - Logs warnings for debugging purposes
+ * - Supports both local and remote servers
+ * - Handles CLI flags in composePath via getComposePath parsing
+ */
 export const loadServices = async (
 	composeId: string,
 	type: "fetch" | "cache" = "fetch",
 ) => {
 	const compose = await findComposeById(composeId);
 
-	if (type === "fetch") {
-		if (compose.serverId) {
-			await cloneComposeRemote(compose);
-		} else {
-			await cloneCompose(compose);
+	try {
+		if (type === "fetch") {
+			if (compose.serverId) {
+				await cloneComposeRemote(compose);
+			} else {
+				await cloneCompose(compose);
+			}
 		}
-	}
 
-	let composeData: ComposeSpecification | null;
+		let composeData: ComposeSpecification | null;
 
-	if (compose.serverId) {
-		composeData = await loadDockerComposeRemote(compose);
-	} else {
-		composeData = await loadDockerCompose(compose);
-	}
+		if (compose.serverId) {
+			composeData = await loadDockerComposeRemote(compose);
+		} else {
+			composeData = await loadDockerCompose(compose);
+		}
 
-	if (compose.randomize && composeData) {
-		const randomizedCompose = randomizeSpecificationFile(
-			composeData,
-			compose.suffix,
+		if (compose.randomize && composeData) {
+			const randomizedCompose = randomizeSpecificationFile(
+				composeData,
+				compose.suffix,
+			);
+			composeData = randomizedCompose;
+		}
+
+		if (!composeData?.services) {
+			console.warn(
+				`No services found in compose file for composeId: ${composeId}`,
+			);
+			return []; // Return empty array instead of throwing
+		}
+
+		const services = Object.keys(composeData.services);
+		return [...services];
+	} catch (error) {
+		console.warn(
+			`Error loading services for composeId: ${composeId}`,
+			error instanceof Error ? error.message : error,
 		);
-		composeData = randomizedCompose;
+		return []; // Return empty array on error, allow manual input
 	}
-
-	if (!composeData?.services) {
-		throw new TRPCError({
-			code: "NOT_FOUND",
-			message: "Services not found",
-		});
-	}
-
-	const services = Object.keys(composeData.services);
-
-	return [...services];
 };
 
 export const updateCompose = async (

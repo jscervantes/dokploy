@@ -71,6 +71,49 @@ export const cloneComposeRemote = async (compose: Compose) => {
 	}
 };
 
+/**
+ * Parses composePath to extract actual file path, handling CLI flags
+ * Supports: -f file.yml, --file file.yml, -f "quoted path.yml"
+ * Handles edge cases: multiple flags (uses first), whitespace, empty paths
+ */
+const parseComposePath = (composePath: string): string => {
+	// Handle empty or whitespace-only paths
+	const trimmed = composePath.trim();
+	if (!trimmed) {
+		return "./docker-compose.yml"; // Default fallback
+	}
+
+	// If no CLI flags detected, return as-is
+	if (!trimmed.includes("-f") && !trimmed.includes("--file")) {
+		return trimmed;
+	}
+
+	// Pattern 1: -f file.yml or -f "file.yml" or -f 'file.yml'
+	// Matches first occurrence only (handles multiple -f flags by taking first)
+	const flagPattern = /-f\s+(?:"([^"]+)"|'([^']+)'|(\S+))/;
+	const flagMatch = trimmed.match(flagPattern);
+	if (flagMatch) {
+		const extracted = flagMatch[1] || flagMatch[2] || flagMatch[3] || "";
+		const result = extracted.trim();
+		// If extracted path is empty, fall back to default
+		return result || "./docker-compose.yml";
+	}
+
+	// Pattern 2: --file file.yml or --file "file.yml" or --file 'file.yml'
+	const longFlagPattern = /--file\s+(?:"([^"]+)"|'([^']+)'|(\S+))/;
+	const longFlagMatch = trimmed.match(longFlagPattern);
+	if (longFlagMatch) {
+		const extracted =
+			longFlagMatch[1] || longFlagMatch[2] || longFlagMatch[3] || "";
+		const result = extracted.trim();
+		// If extracted path is empty, fall back to default
+		return result || "./docker-compose.yml";
+	}
+
+	// Fallback: return original (may contain flags, but better than nothing)
+	return trimmed;
+};
+
 export const getComposePath = (compose: Compose) => {
 	const { COMPOSE_PATH } = paths(!!compose.serverId);
 	const { appName, sourceType, composePath } = compose;
@@ -79,7 +122,7 @@ export const getComposePath = (compose: Compose) => {
 	if (sourceType === "raw") {
 		path = "docker-compose.yml";
 	} else {
-		path = composePath;
+		path = parseComposePath(composePath);
 	}
 
 	return join(COMPOSE_PATH, appName, "code", path);
