@@ -1,5 +1,11 @@
 import type http from "node:http";
-import { findServerById, validateRequest } from "@dokploy/server";
+import {
+	execAsync,
+	execAsyncRemote,
+	findServerById,
+	getContainerWorkingDir,
+	validateRequest,
+} from "@dokploy/server";
 import { spawn } from "node-pty";
 import { Client } from "ssh2";
 import { WebSocketServer } from "ws";
@@ -44,6 +50,36 @@ export const setupDockerContainerTerminalWebSocketServer = (
 			return;
 		}
 		try {
+			// Get working directory for the container
+			const workingDir = await getContainerWorkingDir(
+				containerId,
+				serverId || null,
+			);
+
+			// Determine which shell to use, with fallback to sh if bash is not available
+			let shellToUse = activeWay || "bash";
+			
+			// If bash is requested, try to verify it exists, otherwise fallback to sh
+			if (shellToUse === "bash") {
+				try {
+					const checkCommand = `docker exec ${containerId} which bash 2>/dev/null || echo "not_found"`;
+					let checkResult;
+					
+					if (serverId) {
+						checkResult = await execAsyncRemote(serverId, checkCommand);
+					} else {
+						checkResult = await execAsync(checkCommand);
+					}
+					
+					if (checkResult.stdout.trim() === "not_found" || !checkResult.stdout.trim()) {
+						shellToUse = "sh";
+					}
+				} catch (_error) {
+					// If check fails, fallback to sh as it's more universally available
+					shellToUse = "sh";
+				}
+			}
+
 			if (serverId) {
 				const server = await findServerById(serverId);
 				if (!server.sshKeyId)
@@ -55,7 +91,7 @@ export const setupDockerContainerTerminalWebSocketServer = (
 				conn
 					.once("ready", () => {
 						conn.exec(
-							`docker exec -it ${containerId} ${activeWay}`,
+							`docker exec -w "${workingDir}" -it ${containerId} ${shellToUse}`,
 							{ pty: true },
 							(err, stream) => {
 								if (err) throw err;
@@ -107,7 +143,7 @@ export const setupDockerContainerTerminalWebSocketServer = (
 				const shell = getShell();
 				const ptyProcess = spawn(
 					shell,
-					["-c", `docker exec -it ${containerId} ${activeWay}`],
+					["-c", `docker exec -w "${workingDir}" -it ${containerId} ${shellToUse}`],
 					{},
 				);
 
