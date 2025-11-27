@@ -4,6 +4,7 @@ import { paths } from "@dokploy/server/constants";
 import type { Schedule } from "@dokploy/server/db/schema/schedule";
 import { createDeploymentSchedule } from "@dokploy/server/services/deployment";
 import { updateDeploymentStatus } from "@dokploy/server/services/deployment";
+import { getContainerWorkingDir } from "@dokploy/server/services/docker";
 import { findScheduleById } from "@dokploy/server/services/schedule";
 import { scheduleJob as scheduleJobNode, scheduledJobs } from "node-schedule";
 import { getComposeContainer, getServiceContainer } from "../docker/utils";
@@ -58,14 +59,17 @@ export const runCommand = async (scheduleId: string) => {
 			serverId = compose.serverId || "";
 		}
 
+		// Get working directory for the container
+		const workingDir = await getContainerWorkingDir(containerId, serverId || null);
+
 		if (serverId) {
 			try {
 				await execAsyncRemote(
 					serverId,
 					`
 					set -e
-					echo "Running command: docker exec ${containerId} ${shellType} -c '${command}'" >> ${deployment.logPath};
-					docker exec ${containerId} ${shellType} -c '${command}' >> ${deployment.logPath} 2>> ${deployment.logPath} || { 
+					echo "Running command: docker exec -w "${workingDir}" ${containerId} ${shellType} -c '${command}'" >> ${deployment.logPath};
+					docker exec -w "${workingDir}" ${containerId} ${shellType} -c '${command}' >> ${deployment.logPath} 2>> ${deployment.logPath} || { 
 						echo "❌ Command failed" >> ${deployment.logPath};
 						exit 1;
 					}
@@ -81,11 +85,11 @@ export const runCommand = async (scheduleId: string) => {
 
 			try {
 				writeStream.write(
-					`docker exec ${containerId} ${shellType} -c ${command}\n`,
+					`docker exec -w ${workingDir} ${containerId} ${shellType} -c ${command}\n`,
 				);
 				await spawnAsync(
 					"docker",
-					["exec", containerId, shellType, "-c", command],
+					["exec", "-w", workingDir, containerId, shellType, "-c", command],
 					(data) => {
 						if (writeStream.writable) {
 							writeStream.write(data);

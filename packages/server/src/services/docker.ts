@@ -101,6 +101,40 @@ export const getConfig = async (
 	} catch (_error) {}
 };
 
+export const getContainerWorkingDir = async (
+	containerId: string,
+	serverId?: string | null,
+): Promise<string> => {
+	try {
+		const command = `docker inspect ${containerId} --format '{{.Config.WorkingDir}}'`;
+		let stdout = "";
+
+		if (serverId) {
+			const result = await execAsyncRemote(serverId, command);
+			stdout = result.stdout.trim();
+		} else {
+			const result = await execAsync(command);
+			stdout = result.stdout.trim();
+		}
+
+		// Return working directory if set and not empty, otherwise use default
+		if (stdout && stdout !== "") {
+			return stdout;
+		}
+
+		// Fallback to root directory (always exists)
+		return "/";
+	} catch (error) {
+		// Log error but return fallback to keep terminal/commands functional
+		console.error(
+			`Failed to get working directory for container ${containerId}:`,
+			error,
+		);
+		// Fallback to root directory (always exists)
+		return "/";
+	}
+};
+
 export const getContainersByAppNameMatch = async (
 	appName: string,
 	appType?: "stack" | "docker-compose",
