@@ -296,6 +296,15 @@ export const apiUpdateWebServerMonitoring = z.object({
 });
 
 export const apiUpdateUser = createSchema.partial().extend({
+	email: z
+		.string()
+		.min(1, {
+			message: "Email is required",
+		})
+		.email({
+			message: "Email must be a valid email",
+		})
+		.optional(),
 	password: z.string().optional(),
 	currentPassword: z.string().optional(),
 	metricsConfig: z
