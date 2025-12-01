@@ -38,7 +38,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { api } from "@/utils/api";
+import { api, type RouterOutputs } from "@/utils/api";
 import {
 	AlertTriangle,
 	BookIcon,
@@ -57,9 +57,7 @@ import { ProjectEnvironment } from "./project-environment";
 
 const PROJECT_SORT_STORAGE_KEY = "dokploy.projects.sort";
 
-type ProjectWithServices = NonNullable<
-	ReturnType<typeof api.project.all.useQuery>["data"]
->[number];
+type ProjectWithServices = RouterOutputs["project"]["all"][number];
 
 const getTotalServices = (project: ProjectWithServices) =>
 	project?.mariadb.length +
@@ -117,16 +115,12 @@ export const ShowProjects = () => {
 	const { data: auth } = api.user.get.useQuery();
 	const { mutateAsync } = api.project.remove.useMutation();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [sortValue, setSortValue] = useState<SortValue>("createdAt-desc");
-
-	useEffect(() => {
-		if (typeof window === "undefined") return;
+	const [sortValue, setSortValue] = useState<SortValue>(() => {
+		if (typeof window === "undefined") return "createdAt-desc";
 		const storedSort = window.localStorage.getItem(PROJECT_SORT_STORAGE_KEY);
 		const validSort = SORT_OPTIONS.find((option) => option.value === storedSort);
-		if (validSort) {
-			setSortValue(validSort.value);
-		}
-	}, []);
+		return validSort ? validSort.value : "createdAt-desc";
+	});
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
