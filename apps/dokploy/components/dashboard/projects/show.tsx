@@ -31,6 +31,13 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/utils/api";
 import {
 	AlertTriangle,
@@ -43,10 +50,66 @@ import {
 	TrashIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { HandleProject } from "./handle-project";
 import { ProjectEnvironment } from "./project-environment";
+
+const PROJECT_SORT_STORAGE_KEY = "dokploy.projects.sort";
+
+type ProjectWithServices = NonNullable<
+	ReturnType<typeof api.project.all.useQuery>["data"]
+>[number];
+
+const getTotalServices = (project: ProjectWithServices) =>
+	project?.mariadb.length +
+	project?.mongo.length +
+	project?.mysql.length +
+	project?.postgres.length +
+	project?.redis.length +
+	project?.applications.length +
+	project?.compose.length;
+
+const SORT_OPTIONS = [
+	{
+		value: "createdAt-desc",
+		label: "Creation Date (Newest)",
+		comparator: (a: ProjectWithServices, b: ProjectWithServices) =>
+			new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+	},
+	{
+		value: "createdAt-asc",
+		label: "Creation Date (Oldest)",
+		comparator: (a: ProjectWithServices, b: ProjectWithServices) =>
+			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+	},
+	{
+		value: "name-asc",
+		label: "Name (A-Z)",
+		comparator: (a: ProjectWithServices, b: ProjectWithServices) =>
+			a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+	},
+	{
+		value: "name-desc",
+		label: "Name (Z-A)",
+		comparator: (a: ProjectWithServices, b: ProjectWithServices) =>
+			b.name.localeCompare(a.name, undefined, { sensitivity: "base" }),
+	},
+	{
+		value: "services-desc",
+		label: "Services (Most)",
+		comparator: (a: ProjectWithServices, b: ProjectWithServices) =>
+			getTotalServices(b) - getTotalServices(a),
+	},
+	{
+		value: "services-asc",
+		label: "Services (Least)",
+		comparator: (a: ProjectWithServices, b: ProjectWithServices) =>
+			getTotalServices(a) - getTotalServices(b),
+	},
+] as const;
+
+type SortValue = (typeof SORT_OPTIONS)[number]["value"];
 
 export const ShowProjects = () => {
 	const utils = api.useUtils();
@@ -54,15 +117,39 @@ export const ShowProjects = () => {
 	const { data: auth } = api.user.get.useQuery();
 	const { mutateAsync } = api.project.remove.useMutation();
 	const [searchQuery, setSearchQuery] = useState("");
+	const [sortValue, setSortValue] = useState<SortValue>("createdAt-desc");
 
-	const filteredProjects = useMemo(() => {
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const storedSort = window.localStorage.getItem(PROJECT_SORT_STORAGE_KEY);
+		const validSort = SORT_OPTIONS.find((option) => option.value === storedSort);
+		if (validSort) {
+			setSortValue(validSort.value);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		window.localStorage.setItem(PROJECT_SORT_STORAGE_KEY, sortValue);
+	}, [sortValue]);
+
+	const filteredAndSortedProjects = useMemo(() => {
 		if (!data) return [];
-		return data.filter(
-			(project) =>
-				project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				project.description?.toLowerCase().includes(searchQuery.toLowerCase()),
-		);
-	}, [data, searchQuery]);
+		const normalizedQuery = searchQuery.toLowerCase().trim();
+		const filteredProjects = data.filter((project) => {
+			const name = project.name.toLowerCase();
+			const description = project.description
+				? project.description.toLowerCase()
+				: "";
+			return (
+				name.includes(normalizedQuery) || description.includes(normalizedQuery)
+			);
+		});
+		const currentSort =
+			SORT_OPTIONS.find((option) => option.value === sortValue) ||
+			SORT_OPTIONS[0];
+		return [...filteredProjects].sort(currentSort.comparator);
+	}, [data, searchQuery, sortValue]);
 
 	return (
 		<>
@@ -98,16 +185,40 @@ export const ShowProjects = () => {
 								</div>
 							) : (
 								<>
-									<div className="w-full relative">
-										<Input
-											placeholder="Filter projects..."
-											value={searchQuery}
-											onChange={(e) => setSearchQuery(e.target.value)}
-											className="pr-10"
-										/>
-										<Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+									<div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+										<div className="w-full relative">
+											<Input
+												placeholder="Filter projects..."
+												value={searchQuery}
+												onChange={(e) => setSearchQuery(e.target.value)}
+												className="pr-10"
+											/>
+											<Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+										</div>
+										<div className="w-full lg:w-auto">
+											<Select
+												value={sortValue}
+												onValueChange={(value) =>
+													setSortValue(value as SortValue)
+												}
+											>
+												<SelectTrigger className="w-full min-w-[240px]">
+													<SelectValue placeholder="Sort projects" />
+												</SelectTrigger>
+												<SelectContent>
+													{SORT_OPTIONS.map((option) => (
+														<SelectItem
+															key={option.value}
+															value={option.value}
+														>
+															{option.label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									</div>
-									{filteredProjects?.length === 0 && (
+									{filteredAndSortedProjects?.length === 0 && (
 										<div className="mt-6 flex h-[50vh] w-full flex-col items-center justify-center space-y-4">
 											<FolderInput className="size-8 self-center text-muted-foreground" />
 											<span className="text-center font-medium text-muted-foreground">
@@ -116,7 +227,7 @@ export const ShowProjects = () => {
 										</div>
 									)}
 									<div className="w-full grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 flex-wrap gap-5">
-										{filteredProjects?.map((project) => {
+										{filteredAndSortedProjects?.map((project) => {
 											const emptyServices =
 												project?.mariadb.length === 0 &&
 												project?.mongo.length === 0 &&
@@ -126,14 +237,7 @@ export const ShowProjects = () => {
 												project?.applications.length === 0 &&
 												project?.compose.length === 0;
 
-											const totalServices =
-												project?.mariadb.length +
-												project?.mongo.length +
-												project?.mysql.length +
-												project?.postgres.length +
-												project?.redis.length +
-												project?.applications.length +
-												project?.compose.length;
+											const totalServices = getTotalServices(project);
 
 											return (
 												<div
